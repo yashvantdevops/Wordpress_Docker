@@ -1,0 +1,95 @@
+name: wordpress-dev
+
+services:
+  db:
+    container_name: wordpress_dev_db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    networks:
+      - wordpress_dev_network
+
+  redis:
+    container_name: wordpress_dev_redis
+    command: redis-server --appendonly yes --maxmemory ${REDIS_MAXMEMORY:-128mb} --maxmemory-policy ${REDIS_POLICY:-allkeys-lru}
+    networks:
+      - wordpress_dev_network
+
+  wordpress:
+    container_name: wordpress_dev_app
+    ports:
+      - "${WP_PORT:-8080}:80"
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_USER: ${MYSQL_USER}
+      WORDPRESS_DB_PASSWORD: ${MYSQL_PASSWORD}
+      WORDPRESS_DB_NAME: ${MYSQL_DATABASE}
+      WORDPRESS_REDIS_HOST: redis
+      WORDPRESS_REDIS_PORT: 6379
+      WP_DEBUG: ${WP_DEBUG:-true}
+      WP_DEBUG_DISPLAY: ${WP_DEBUG_DISPLAY:-true}
+      WP_DEBUG_LOG: ${WP_DEBUG_LOG:-/var/www/html/wp-content/debug.log}
+    volumes:
+      - wordpress_dev_html:/var/www/html
+      - wordpress_dev_uploads:/var/www/html/wp-content/uploads
+      - wordpress_dev_cache:/var/www/html/wp-content/cache
+    networks:
+      - wordpress_dev_network
+
+  wpcli:
+    container_name: wordpress_dev_wpcli
+    depends_on:
+      db:
+        condition: service_healthy
+      wordpress:
+        condition: service_started
+    volumes:
+      - wordpress_dev_html:/var/www/html
+    networks:
+      - wordpress_dev_network
+
+  phpmyadmin:
+    container_name: wordpress_dev_phpmyadmin
+    ports:
+      - "${PHPMYADMIN_PORT:-8081}:80"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PMA_HOST: db
+      PMA_USER: ${MYSQL_USER}
+      PMA_PASSWORD: ${MYSQL_PASSWORD}
+    networks:
+      - wordpress_dev_network
+
+networks:
+  wordpress_dev_network:
+    name: wordpress_dev_network
+    driver: bridge
+
+volumes:
+  wordpress_dev_html:
+    name: wordpress_dev_html
+    driver: local
+  wordpress_dev_uploads:
+    name: wordpress_dev_uploads
+    driver: local
+  wordpress_dev_cache:
+    name: wordpress_dev_cache
+    driver: local
+  db_data:
+    name: wordpress_dev_db_data
+    driver: local
+  redis_data:
+    name: wordpress_dev_redis_data
+    driver: local
+  wp_db_data:
+    name: wordpress_dev_db_data
+    driver: local
+    external: false
+  wp_redis_data:
+    name: wordpress_dev_redis_data
+    driver: local
+    external: false

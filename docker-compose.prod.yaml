@@ -1,0 +1,114 @@
+name: wordpress-prod
+
+services:
+  db:
+    container_name: wordpress_prod_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    deploy:
+      resources:
+        limits:
+          memory: ${MEMORY_LIMIT:-2048m}
+          cpus: ${CPUS_LIMIT:-2.0}
+        reservations:
+          memory: ${MEMORY_RESERVATION:-1536m}
+          cpus: ${CPUS_RESERVATION:-1.5}
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - wordpress_prod_network
+# Production Override: high-security, resource-controlled, immutable image deployment
+# Usage: docker compose -f docker-compose.yaml -f docker-compose.prod.yaml --env-file .env.prod up -d
+# 
+# Key differences from dev/staging:
+# - No debug output
+# - Strict resource limits and CPU shares
+# - Immutable WordPress code (no host binds)
+# - Separate volumes for user uploads and cache
+# - No phpmyadmin or wpcli exposed by default
+# - Security: readonly root filesystem where possible
+  redis:
+    container_name: wordpress_prod_redis
+    restart: always
+    command: redis-server --appendonly yes --maxmemory ${REDIS_MAXMEMORY:-512mb} --maxmemory-policy ${REDIS_POLICY:-volatile-lfu}
+    deploy:
+      resources:
+        limits:
+          memory: 1024m
+          cpus: 1.0
+        reservations:
+          memory: 512m
+          cpus: 0.5
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - wordpress_prod_network
+
+  wordpress:
+    container_name: wordpress_prod_app
+    restart: always
+    ports:
+      - "${WP_PORT:-80}:80"
+    environment:
+      WORDPRESS_DB_HOST: db:3306
+      WORDPRESS_DB_USER: ${MYSQL_USER}
+      WORDPRESS_DB_PASSWORD: ${MYSQL_PASSWORD}
+      WORDPRESS_DB_NAME: ${MYSQL_DATABASE}
+      WORDPRESS_REDIS_HOST: redis
+      WORDPRESS_REDIS_PORT: 6379
+      WP_DEBUG: 'false'
+      WP_DEBUG_DISPLAY: 'false'
+      WP_MEMORY_LIMIT: 256M
+      WP_MAX_MEMORY_LIMIT: 512M
+    volumes:
+      # No source code bind - production image is immutable
+      - wordpress_prod_uploads:/var/www/html/wp-content/uploads
+      - wordpress_prod_cache:/var/www/html/wp-content/cache
+    deploy:
+      resources:
+        limits:
+          memory: ${MEMORY_LIMIT:-2048m}
+          cpus: ${CPUS_LIMIT:-2.0}
+        reservations:
+          memory: ${MEMORY_RESERVATION:-1536m}
+          cpus: ${CPUS_RESERVATION:-1.5}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - NET_RAW
+      - SYS_CHROOT
+    cap_add:
+      - NET_BIND_SERVICE
+    networks:
+      - wordpress_prod_network
+
+networks:
+  wordpress_prod_network:
+    name: wordpress_prod_network
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: 1450
+
+volumes:
+  wordpress_prod_uploads:
+    name: wordpress_prod_uploads
+    driver: local
+  wordpress_prod_cache:
+    name: wordpress_prod_cache
+    driver: local
+  db_data:
+    name: wordpress_prod_db_data
+    driver: local
+  redis_data:
+    name: wordpress_prod_redis_data
+    driver: local
+  wp_db_data:
+    name: wordpress_prod_db_data
+    driver: local
+  wp_redis_data:
+    name: wordpress_prod_redis_data
+    driver: local
