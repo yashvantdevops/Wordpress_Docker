@@ -83,4 +83,12 @@ services:
 
 # Networks and volumes are defined in environment-specific override files (dev.yaml, staging.yaml, prod.yaml).
 
+volumes:
+  db_data:
+    driver: local
+  redis_data:
+    driver: local
+  wordpress_dev_html:
+    driver: local
+
 
